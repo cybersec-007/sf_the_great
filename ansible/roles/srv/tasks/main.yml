@@ -1,0 +1,140 @@
+###############################################################################
+# roles/srv/tasks/main.yml
+###############################################################################
+# 0. Подготовка окружения ─────────────────────────────────────────────────────
+- name: Install GitHub runner pre-reqs
+  become: yes
+  ansible.builtin.apt:
+    name: wget
+    state: present
+    update_cache: yes
+
+- name: Install Helm (идемпотентно)
+  become: yes
+  ansible.builtin.shell: |
+    curl -fsSL https://get.helm.sh/helm-v3.14.4-linux-amd64.tar.gz -o /tmp/helm.tar.gz
+    tar -zxf /tmp/helm.tar.gz -C /tmp
+    install -m 0755 /tmp/linux-amd64/helm /usr/local/bin/helm
+  args:
+    creates: /usr/local/bin/helm
+
+# Python-SDK для docker-модулей ----------------------------------------------
+- name: Install python-docker SDK (apt)
+  become: yes
+  ansible.builtin.apt:
+    name: python3-docker
+    state: present
+  register: docker_sdk_apt
+  tags:
+    - docker_sdk
+
+- name: "Fallback: install docker SDK via pip"
+  become: yes
+  ansible.builtin.pip:
+    name: "docker>=5.0.0"      # ← ОБЯЗАТЕЛЬНО в кавычках!
+    executable: pip3
+  when: docker_sdk_apt is failed
+  tags:
+    - docker_sdk
+
+###############################################################################
+# 1. kubeconfig с master-ноды ─────────────────────────────────────────────────
+- name: Fetch kubeconfig from master
+  ansible.builtin.fetch:
+    src:  /etc/kubernetes/admin.conf
+    dest: /tmp/admin.conf
+    flat: yes
+  delegate_to: k8s-master
+  run_once: yes
+
+- name: Ensure {{ kube_home }}/.kube exists
+  become: yes
+  ansible.builtin.file:
+    path: "{{ kube_home }}/.kube"
+    state: directory
+    owner: "{{ kube_user }}"
+    group: "{{ kube_user }}"
+    mode: '0700'
+
+- name: Place kubeconfig
+  become: yes
+  ansible.builtin.copy:
+    src:  /tmp/admin.conf
+    dest: "{{ kube_home }}/.kube/config"
+    owner: "{{ kube_user }}"
+    group: "{{ kube_user }}"
+    mode: '0600'
+
+###############################################################################
+# 2. Мониторинг (Docker Compose) ──────────────────────────────────────────────
+## 2.a Чистка «сломанных» запусков
+- name: Check if prometheus.yml is a directory
+  become: yes
+  ansible.builtin.stat:
+    path: /opt/monitoring/prometheus.yml
+  register: prometheus_yml_stat
+
+- name: Remove wrong prometheus.yml directory
+  become: yes
+  ansible.builtin.file:
+    path: /opt/monitoring/prometheus.yml
+    state: absent
+  when:
+    - prometheus_yml_stat.stat.exists | default(false)
+    - prometheus_yml_stat.stat.isdir  | default(false)
+    
+- name: Check if loki-config.yaml is a directory
+  become: yes
+  ansible.builtin.stat:
+    path: /opt/monitoring/loki-config.yaml
+  register: loki_cfg_stat
+
+- name: Remove wrong loki-config.yaml directory
+  become: yes
+  ansible.builtin.file:
+    path: /opt/monitoring/loki-config.yaml
+    state: absent
+  when:
+    - loki_cfg_stat.stat.exists | default(false)
+    - loki_cfg_stat.stat.isdir  | default(false)
+
+## 2.b Подготовка конфигов
+- name: Ensure /opt/monitoring exists
+  become: yes
+  ansible.builtin.file:
+    path: /opt/monitoring
+    state: directory
+    mode: '0755'
+
+- name: Copy Prometheus config
+  become: yes
+  ansible.builtin.copy:
+    src:  prometheus.yml
+    dest: /opt/monitoring/prometheus.yml
+    mode: '0644'
+
+- name: Copy Loki config            # <-- исправляем dest
+  become: yes
+  ansible.builtin.copy:
+    src: loki-config.yaml           # файл лежит в roles/srv/files/
+    dest: /opt/monitoring/loki-config.yaml
+    mode: '0644'
+    force: yes                      # перезапишет, если вдруг уже есть файл
+
+- name: Copy docker-compose file
+  become: yes
+  ansible.builtin.copy:
+    src:  monitoring-docker-compose.yml
+    dest: /opt/monitoring/docker-compose.yml
+    mode: '0644'
+
+###############################################################################
+# 3. Запуск / обновление стека ────────────────────────────────────────────────
+- name: Deploy / update monitoring stack
+  become: yes
+  community.docker.docker_compose_v2:
+    project_src: /opt/monitoring
+    pull:        missing
+    state:       present
+  tags:
+    - monitoring

@@ -1,0 +1,24 @@
+# IDE / OS
+.DS_Store
+.idea/
+.vscode/
+
+# Python / Ansible artefacts
+__pycache__/
+*.pyc
+*.retry
+venv/
+.env
+
+# Terraform / Helm caches
+*.tfstate
+*.tfstate.*
+.terraform/
+charts/**/charts/
+charts/**/tmpcharts/
+
+# Логи, секреты, kubeconfig'и
+ansible/artifacts/
+*.log
+kubeconfig*
+*.b64

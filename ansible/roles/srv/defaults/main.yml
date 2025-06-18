@@ -1,0 +1,3 @@
+# --- roles/srv/defaults/main.yml ---------------------------------
+kube_user: ubuntu
+kube_home: "/home/{{ kube_user }}"

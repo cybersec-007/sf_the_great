@@ -1,0 +1,45 @@
+services:
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - "./prometheus.yml:/etc/prometheus/prometheus.yml:ro"
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+    ports:
+      - "9090:9090"
+    restart: unless-stopped
+
+  nodeexporter:
+    image: prom/node-exporter:latest
+    network_mode: host
+    restart: unless-stopped
+
+  blackbox:
+    image: prom/blackbox-exporter:latest
+    ports:
+      - "9115:9115"
+    restart: unless-stopped
+
+  loki:
+    image: grafana/loki:latest
+    volumes:
+      - "./loki-config.yaml:/etc/loki/local-config.yaml:ro"
+    ports:
+      - "3100:3100"
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+
+  promtail:
+    image: grafana/promtail:latest
+    command:
+      - "-config.file=/etc/promtail/promtail.yaml"
+    volumes:
+      - /var/log:/var/log
+      - /opt/monitoring/promtail.yaml:/etc/promtail/promtail.yaml:ro
+    networks:
+      - monitoring_default

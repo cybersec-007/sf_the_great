@@ -1,0 +1,5 @@
+---
+# применяется к обоим узлам (master/node) одинаково
+- name: apply_sysctl
+  become: yes
+  command: sysctl --system

@@ -1,0 +1,65 @@
+# roles/common/tasks/main.yml
+# ──────────────────────────
+- name: Обновить apt-кеш
+  apt:
+    update_cache: yes
+  when: ansible_facts['pkg_mgr'] == 'apt'
+
+- name: Установить базовые пакеты
+  apt:
+    name:
+      - curl
+      - ca-certificates
+      - gnupg
+      - lsb-release
+    state: present
+
+- name: Отключить swap (если есть)
+  command: swapoff -a
+  when: ansible_swaptotal_mb | int > 0
+  become: yes
+  changed_when: false
+
+- name: Закомментировать swap в /etc/fstab
+  replace:
+    path: /etc/fstab
+    regexp: '^([^#].*?\sswap\s)'
+    replace: '# \1'
+  become: yes
+
+# ---------- Docker ----------
+
+- name: Добавить Docker GPG-ключ
+  apt_key:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    state: present
+
+- name: Добавить репозиторий Docker
+  apt_repository:
+    repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+    filename: docker
+    state: present
+
+- name: Установить docker.io (с Compose v2 внутри)
+  apt:
+    name: docker.io
+    state: present
+    update_cache: yes
+
+# ---------- Compose v2 plugin ----------
+
+- name: Поставить пакет docker-compose-plugin, если доступен
+  apt:
+    name: docker-compose-plugin
+    state: present
+    update_cache: yes
+  register: compose_pkg
+  ignore_errors: yes
+
+- name: Скачать бинарь Compose v2 (fallback)
+  when: compose_pkg is failed
+  get_url:
+    url: https://github.com/docker/compose/releases/download/v2.29.0/docker-compose-linux-x86_64
+    dest: /usr/local/lib/docker/cli-plugins/docker-compose
+    mode: "0755"
+  become: yes

@@ -1,0 +1,8 @@
+# macOS artefacts
+.DS_Store
+._*
+Icon?
+# Git и IDE
+.git
+.vscode
+.idea

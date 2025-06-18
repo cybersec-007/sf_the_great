@@ -1,0 +1,24 @@
+
+- name: Configure all servers
+  hosts: all
+  become: yes
+  roles:
+    - common
+
+- name: Configure Kubernetes master
+  hosts: k8s-master
+  become: yes
+  roles:
+    - k8s-master
+
+- name: Configure Kubernetes node
+  hosts: k8s-node
+  become: yes
+  roles:
+    - k8s-node
+
+- name: Configure CI/Monitoring server
+  hosts: srv
+  become: yes
+  roles:
+    - srv

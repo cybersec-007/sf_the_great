@@ -1,0 +1,30 @@
+app:
+  replicaCount: 1
+  image:
+    repository: cybersec7007/devops-infra
+    pullPolicy: IfNotPresent
+    tag: "latest"
+
+  service:
+    type: NodePort
+    port: 8000
+    nodePort: 30080
+
+  resources: {}
+  #  limits:
+  #    cpu: 100m
+  #    memory: 128Mi
+  #  requests:
+  #    cpu: 100m
+  #    memory: 128Mi
+
+postgres:
+  image:
+    repository: postgres
+    tag: "13-alpine"
+  
+  service:
+    port: 5432
+
+  persistence:
+    enabled: false

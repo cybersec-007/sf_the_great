@@ -1,0 +1,155 @@
+---
+###############################################################################
+# 0. Базовые директории / helper-пакеты
+###############################################################################
+- name: Ensure helper dirs & packages are present
+  become: yes
+  block:
+    - name: Ensure /etc/apt/keyrings exists
+      file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: "0755"
+
+    - name: Install helper packages
+      apt:
+        name:
+          - ca-certificates
+          - curl
+          - apt-transport-https
+        state: present
+        update_cache: yes
+
+###############################################################################
+# 0.b containerd (SystemdCgroup + pause:3.9)
+###############################################################################
+- name: Install containerd runtime
+  become: yes
+  apt:
+    name: containerd
+    state: present
+    update_cache: yes
+
+- name: Ensure /etc/containerd dir exists
+  become: yes
+  file:
+    path: /etc/containerd
+    state: directory
+    mode: "0755"
+
+- name: Generate default containerd config if absent
+  become: yes
+  shell: |
+    containerd config default > /etc/containerd/config.toml
+  args:
+    creates: /etc/containerd/config.toml
+  register: containerd_cfg_created
+
+- name: Enable SystemdCgroup in containerd
+  become: yes
+  replace:
+    path: /etc/containerd/config.toml
+    regexp: '^\s*SystemdCgroup = false'
+    replace: '    SystemdCgroup = true'
+  register: cgroup_patch
+
+- name: Set correct sandbox (pause) image
+  become: yes
+  replace:
+    path: /etc/containerd/config.toml
+    regexp: '^\s*sandbox_image = ".*/pause:.*"'
+    replace: '    sandbox_image = "registry.k8s.io/pause:3.9"'
+  register: pause_patch
+
+- name: Restart containerd if config changed
+  become: yes
+  systemd:
+    name: containerd
+    state: restarted
+  when: cgroup_patch.changed or pause_patch.changed
+
+###############################################################################
+# 0.c Сетевые модули и sysctl
+###############################################################################
+- name: Load kernel modules overlay / br_netfilter
+  become: yes
+  community.general.modprobe:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - overlay
+    - br_netfilter
+
+- name: Persist Kubernetes-required sysctl
+  become: yes
+  copy:
+    dest: /etc/sysctl.d/99-kubernetes.conf
+    content: |
+      net.bridge.bridge-nf-call-iptables  = 1
+      net.bridge.bridge-nf-call-ip6tables = 1
+      net.ipv4.ip_forward                 = 1
+  notify: apply_sysctl
+
+###############################################################################
+# 1. Репозиторий Kubernetes (pkgs.k8s.io)
+###############################################################################
+- name: Remove legacy apt.kubernetes.io list if present
+  become: yes
+  file:
+    path: /etc/apt/sources.list.d/kubernetes.list
+    state: absent
+
+- name: Download Kubernetes repo key (ascii-armored)
+  become: yes
+  get_url:
+    url: https://pkgs.k8s.io/core:/stable:/v1.30/deb/Release.key
+    dest: /etc/apt/keyrings/kubernetes.asc
+    mode: "0644"
+
+- name: Add Kubernetes apt repository
+  become: yes
+  apt_repository:
+    repo: >-
+      deb [signed-by=/etc/apt/keyrings/kubernetes.asc]
+      https://pkgs.k8s.io/core:/stable:/v1.30/deb/
+      /
+    filename: kubernetes
+    state: present
+    update_cache: yes        # сразу обновляем
+
+###############################################################################
+# 2. Установка и «заморозка» kube-пакетов
+###############################################################################
+- name: Install kubelet / kubeadm
+  become: yes
+  apt:
+    name:
+      - kubelet
+      - kubeadm
+    state: present
+    update_cache: no         # уже обновили выше
+
+- name: Hold kube-packages (dpkg)
+  become: yes
+  ansible.builtin.dpkg_selections:
+    name: "{{ item }}"
+    selection: hold
+  loop:
+    - kubelet
+    - kubeadm
+
+###############################################################################
+# 3. Join кластера (идемпотентно)
+###############################################################################
+- name: Fetch join command from master
+  command: kubeadm token create --print-join-command
+  delegate_to: k8s-master
+  register: join_cmd
+  run_once: yes
+
+- name: Join node to cluster
+  become: yes
+  shell: "{{ join_cmd.stdout }} --ignore-preflight-errors=all"
+  args:
+    creates: /etc/kubernetes/kubelet.conf   # если файл уже есть — нода в кластере
+
