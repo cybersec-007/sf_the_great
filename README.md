@@ -138,7 +138,7 @@ After \~5 min you will have:
 
 ## Step 3 — CI/CD via GitHub Actions
 
-> The CI file lives in `.github/workflows/builddeploy.yml` (see `ci/` folder). Copy it into *your app repo*.
+> The CI file lives in `.github/workflows/builddeploy.yml` (see `/` folder). Copy it into *your app repo*.
 
 ### Secrets to add in GitHub → Settings → **Actions → Secrets**
 
