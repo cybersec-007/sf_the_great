@@ -8,7 +8,7 @@
 ## Table of contents
 
 1. [Architecture](#architecture)
-2. [Before‑you‑begin](#before-you-begin)
+2. [Before‑you‑begin](#Before‑you‑begin)
 3. [Step 1 — Provision infra with Terraform](#step-1—-provision-infra-with-terraform)
 4. [Step 2 — Configure hosts with Ansible](#step-2—-configure-hosts-with-ansible)
 5. [Step 3 — CI/CD via GitHub Actions](#step-3—-cicd-via-github-actions)
