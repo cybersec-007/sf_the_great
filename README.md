@@ -196,9 +196,7 @@ Connect Grafana **Contact points** (e.g. Telegram) to receive instant alerts.
 
 ## Manual actions checklist
 
-*
-
-Everything else is **fully automated**.
+* Everything else is **fully automated**.
 
 ---
 
