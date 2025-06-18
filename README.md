@@ -66,7 +66,7 @@ brew install yandex-cloud/yandex-cloud/yc
 ```
 
 1. **Generate/ensure an SSH key‑pair** (default uses `~/.ssh/id_rsa.pub`).
-2. \*\*Authenticate \*\*\`\` and copy your `cloud-id`, `folder-id`, and OAuth token:
+2. **Authenticate yc** and copy your `cloud-id`, `folder-id`, and OAuth token:
 
    ```bash
    yc init               # interactive login
